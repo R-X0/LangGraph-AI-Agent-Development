@@ -1,0 +1,7 @@
+langgraph
+selenium
+beautifulsoup4
+requests
+pyyaml
+neo4j
+anthropic
