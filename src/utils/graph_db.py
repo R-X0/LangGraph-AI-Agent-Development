@@ -30,4 +30,31 @@ class GraphDB:
             "MERGE (c:Company {name: $company_name}) "
             "SET c.contactInfo = $contact_info"
         )
-        tx.run(query, company_name=company_name, contact_info=contact_info)
+        contact_info_str = str(contact_info)
+        tx.run(query, company_name=company_name, contact_info=contact_info_str)
+
+    def get_job_postings(self):
+        with self.driver.session() as session:
+            result = session.run("MATCH (j:JobPosting) RETURN j")
+            return [record["j"] for record in result]
+
+    def get_company_contacts(self):
+        with self.driver.session() as session:
+            result = session.run("MATCH (c:Company) RETURN c")
+            return [record["c"] for record in result]
+
+    def display_stored_data(self):
+        print("Job Postings:")
+        for job in self.get_job_postings():
+            print(f"Title: {job['title']}")
+            print(f"Company: {job['company']}")
+            print(f"Location: {job['location']}")
+            print(f"Description: {job['description'][:100]}...")  # First 100 characters
+            print(f"Post Date: {job['postDate']}")
+            print("---")
+
+        print("\nCompany Contacts:")
+        for company in self.get_company_contacts():
+            print(f"Company: {company['name']}")
+            print(f"Contact Info: {company['contactInfo']}")
+            print("---")
