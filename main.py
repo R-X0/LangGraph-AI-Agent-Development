@@ -14,6 +14,9 @@ def main():
     with open("config.yaml", "r") as config_file:
         config = yaml.safe_load(config_file)
 
+    # Set Hunter.io API key
+    os.environ['HUNTER_API_KEY'] = config['hunter_io']['api_key']
+
     # Define the state schema
     class State(dict):
         job_postings: list

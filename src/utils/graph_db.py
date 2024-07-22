@@ -28,10 +28,21 @@ class GraphDB:
     def _create_company_contact(tx, company_name, contact_info):
         query = (
             "MERGE (c:Company {name: $company_name}) "
-            "SET c.contactInfo = $contact_info"
+            "SET c.email = $email, "
+            "c.position = $position, "
+            "c.confidenceScore = $confidence_score, "
+            "c.domain = $domain, "
+            "c.firstName = $first_name, "
+            "c.lastName = $last_name"
         )
-        contact_info_str = str(contact_info)
-        tx.run(query, company_name=company_name, contact_info=contact_info_str)
+        tx.run(query, 
+               company_name=company_name, 
+               email=contact_info['email'],
+               position=contact_info['position'],
+               confidence_score=contact_info['confidence_score'],
+               domain=contact_info['domain'],
+               first_name=contact_info['first_name'],
+               last_name=contact_info['last_name'])
 
     def get_job_postings(self):
         with self.driver.session() as session:
@@ -56,5 +67,10 @@ class GraphDB:
         print("\nCompany Contacts:")
         for company in self.get_company_contacts():
             print(f"Company: {company['name']}")
-            print(f"Contact Info: {company['contactInfo']}")
+            print(f"Email: {company['email']}")
+            print(f"Position: {company['position']}")
+            print(f"Confidence Score: {company['confidenceScore']}")
+            print(f"Domain: {company['domain']}")
+            print(f"First Name: {company['firstName']}")
+            print(f"Last Name: {company['lastName']}")
             print("---")
