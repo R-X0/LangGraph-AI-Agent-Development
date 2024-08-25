@@ -1,7 +1,10 @@
+# main.py
+
 import yaml
 from langgraph.graph import StateGraph
 from src.agents.job_scraping_agent import job_scraping_agent
 from src.agents.contact_finding_agent import contact_finding_agent
+from src.agents.email_outreach_agent import email_outreach_agent
 from src.utils.graph_db import GraphDB
 import os
 from dotenv import load_dotenv
@@ -14,13 +17,18 @@ def main():
     with open("config.yaml", "r") as config_file:
         config = yaml.safe_load(config_file)
 
-    # Set Hunter.io API key
+    # Set API keys and credentials
     os.environ['HUNTER_API_KEY'] = config['hunter_io']['api_key']
+    os.environ['ANTHROPIC_API_KEY'] = config['anthropic']['api_key']
+    os.environ['APOLLO_API_KEY'] = config['apollo_io']['api_key']
+    os.environ['LINKEDIN_USERNAME'] = config['linkedin_sales_navigator']['username']
+    os.environ['LINKEDIN_PASSWORD'] = config['linkedin_sales_navigator']['password']
 
     # Define the state schema
     class State(dict):
         job_postings: list
         contacts: list
+        prepared_emails: list
 
     # Create the graph
     graph = StateGraph(State)
@@ -28,13 +36,15 @@ def main():
     # Add nodes
     graph.add_node("scrape_jobs", job_scraping_agent(config))
     graph.add_node("find_contacts", contact_finding_agent(config))
+    graph.add_node("prepare_emails", email_outreach_agent(config))
 
     # Add edges
     graph.add_edge("scrape_jobs", "find_contacts")
+    graph.add_edge("find_contacts", "prepare_emails")
 
     # Set entry and exit points
     graph.set_entry_point("scrape_jobs")
-    graph.set_finish_point("find_contacts")
+    graph.set_finish_point("prepare_emails")
 
     # Compile the graph
     workflow = graph.compile()
@@ -42,12 +52,13 @@ def main():
     # Run the graph
     try:
         print("Starting workflow...")
-        initial_state = {"job_postings": [], "contacts": []}
+        initial_state = {"job_postings": [], "contacts": [], "prepared_emails": []}
         result = workflow.invoke(initial_state)
         
         print(f"Workflow completed.")
         print(f"Scraped {len(result['job_postings'])} job postings")
         print(f"Found contact information for {len(result['contacts'])} companies")
+        print(f"Prepared {len(result['prepared_emails'])} email templates")
 
         # Store results in Neo4j
         print("Storing results in Neo4j...")

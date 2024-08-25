@@ -1,3 +1,5 @@
+# src/utils/graph_db.py
+
 from neo4j import GraphDatabase
 
 class GraphDB:
@@ -33,7 +35,8 @@ class GraphDB:
             "c.confidenceScore = $confidence_score, "
             "c.domain = $domain, "
             "c.firstName = $first_name, "
-            "c.lastName = $last_name"
+            "c.lastName = $last_name, "
+            "c.source = $source"
         )
         tx.run(query, 
                company_name=company_name, 
@@ -42,7 +45,8 @@ class GraphDB:
                confidence_score=contact_info['confidence_score'],
                domain=contact_info['domain'],
                first_name=contact_info['first_name'],
-               last_name=contact_info['last_name'])
+               last_name=contact_info['last_name'],
+               source=contact_info['source'])
 
     def get_job_postings(self):
         with self.driver.session() as session:
@@ -73,4 +77,5 @@ class GraphDB:
             print(f"Domain: {company['domain']}")
             print(f"First Name: {company['firstName']}")
             print(f"Last Name: {company['lastName']}")
+            print(f"Source: {company['source']}")
             print("---")
