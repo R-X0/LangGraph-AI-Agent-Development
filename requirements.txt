@@ -5,3 +5,7 @@ requests
 pyyaml
 neo4j
 anthropic
+sendgrid
+email-validator
+pyhunter
+python-dotenv
