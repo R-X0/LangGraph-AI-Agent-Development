@@ -6,6 +6,7 @@ import requests
 from typing import Dict, List
 import logging
 from src.linkedinSalesNavigator import add_contacts
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +20,12 @@ class ContactFinder:
 
     def find_contact_linkedin(self, company_name: str, job_title: str) -> Dict:
         if self.linkedin_prospects is None:
-            self.linkedin_prospects = add_contacts(self.config)
+            try:
+                self.config['InputFileSRC'] = 'job_posts.json'
+                self.linkedin_prospects = add_contacts(self.config)
+            except Exception as e:
+                logger.error(f"Failed to add contacts: {str(e)}")
+                return self._empty_contact_info(job_title, 'LinkedIn Sales Navigator')
 
         for prospect in self.linkedin_prospects:
             if prospect['company'].lower() == company_name.lower() and any(role.lower() in prospect['title'].lower() for role in self.contact_roles):
@@ -136,10 +142,15 @@ def contact_finding_agent(config: Dict):
     def run(state: Dict) -> Dict:
         logger.info("Starting contact finding...")
         contacts = []
-        for job in state.get('job_postings', []):
+        
+        # Read job postings from job_posts.json
+        with open("job_posts.json", "r") as f:
+            job_postings = json.load(f)
+        
+        for job in job_postings:
             contact_info = finder.find_contact(job)
             contacts.append(contact_info)
         logger.info(f"Found contact information for {len(contacts)} companies")
-        return {"job_postings": state['job_postings'], "contacts": contacts}
+        return {"job_postings": job_postings, "contacts": contacts}
 
     return run

@@ -75,6 +75,7 @@ def scrape_indeed(config):
                     "job_location": job_location,
                     "job_description": job_description,
                     "job_post_date": job_post_date,
+                    "source": "Indeed"  # Add this line to include the source
                 })
 
             if len(indeed_posts) >= config['indeed']['minimum_entries']:
