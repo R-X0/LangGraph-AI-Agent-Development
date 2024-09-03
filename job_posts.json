@@ -24,11 +24,27 @@
         "source": "Indeed"
     },
     {
+        "company_name": "Sadup Softech",
+        "job_title": "Big Data engineer /AI-ML",
+        "job_location": "United States",
+        "job_description": "As a Data Engineer or MLOps Engineer, your primary responsibility will be to develop & integrate ML solutions that focus on technology improvements.",
+        "job_post_date": "PostedJust posted",
+        "source": "Indeed"
+    },
+    {
         "company_name": "Lockheed Martin",
         "job_title": "Java & Big Data Developer- Cloud Engineer",
         "job_location": "Annapolis Junction, MD 20701",
         "job_description": "Develop, maintain, and enhance complex and diverse software systems, including processing-intensive analytics, novel algorithm development, and real-time\u2026",
         "job_post_date": "PostedJust posted",
+        "source": "Indeed"
+    },
+    {
+        "company_name": "Capital One",
+        "job_title": "Lead Data Engineer",
+        "job_location": "Richmond, VA 23218",
+        "job_description": "At least 2 years of experience in big data technologies.",
+        "job_post_date": "PostedPosted 1 day ago",
         "source": "Indeed"
     },
     {
@@ -52,30 +68,6 @@
         "job_title": "Associate Director - Data Platform & Engineering",
         "job_location": "Hybrid work in Seattle, WA 98109",
         "job_description": "10 years of experience in software engineering and/or cloud computing with at least 5 years experience leading one or more teams of software or cloud developers\u2026",
-        "job_post_date": "PostedPosted 1 day ago",
-        "source": "Indeed"
-    },
-    {
-        "company_name": "JPMorgan Chase & Co",
-        "job_title": "AWS Software Engineer III, Big Data and ETL",
-        "job_location": "Atlanta, GA 30326",
-        "job_description": "Strong experience in Big Data development & ETL data pipeline implementation using Apache Spark.",
-        "job_post_date": "PostedPosted 1 day ago",
-        "source": "Indeed"
-    },
-    {
-        "company_name": "JPMorgan Chase & Co",
-        "job_title": "Manager of Software Engineering - Data Delivery",
-        "job_location": "Columbus, OH 43240\u00a0(Polaris area)",
-        "job_description": "Manage risk associated with data use, data retention / destruction and data privacy.",
-        "job_post_date": "PostedPosted 1 day ago",
-        "source": "Indeed"
-    },
-    {
-        "company_name": "KPMG",
-        "job_title": "Senior Specialist, Federal Data Engineer",
-        "job_location": "McLean, VA 22102",
-        "job_description": "Maintain / enhance data pipelines, optimize and tune them for performance / efficiency in cloud environments.",
         "job_post_date": "PostedPosted 1 day ago",
         "source": "Indeed"
     }
