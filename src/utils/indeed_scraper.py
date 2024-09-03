@@ -21,10 +21,10 @@ def is_location_valid(location, excluded_states):
         jl_subs = []
     return not any(state in jl_subs for state in excluded_states)
 
-def scrape_indeed(config):
+def scrape_indeed(configs):
     logger.info("Starting Indeed Scraper")
     
-    search_query = config['indeed']['search_query']
+    search_query = configs['indeed']['search_query']
     INDEED_base_url = "https://www.indeed.com/jobs?sort=date&q="
     job_post = urllib.parse.quote_plus(search_query)
 
@@ -36,7 +36,7 @@ def scrape_indeed(config):
 
     while next_page_url:
         payload = {
-            "api_key": config['indeed']['scraper_api_key'],
+            "api_key": configs['indeed']['scraper_api_key'],
             "url": next_page_url,
             "premium": True,
             "ultra_premium": True,
@@ -63,10 +63,10 @@ def scrape_indeed(config):
                     # Silently skip this job posting if any required field is missing
                     continue
 
-                if not all(keyword.lower() in job_title.lower() for keyword in config['indeed']['required_keywords']):
+                if not all(keyword.lower() in job_title.lower() for keyword in configs['indeed']['required_keywords']):
                     continue
 
-                if not is_location_valid(job_location, config['indeed']['states_to_exclude']):
+                if not is_location_valid(job_location, configs['indeed']['states_to_exclude']):
                     continue
 
                 indeed_posts.append({
@@ -78,7 +78,7 @@ def scrape_indeed(config):
                     "source": "Indeed"  # Add this line to include the source
                 })
 
-            if len(indeed_posts) >= config['indeed']['minimum_entries']:
+            if len(indeed_posts) >= configs['indeed']['minimum_entries']:
                 break
 
             try:
@@ -103,6 +103,6 @@ def scrape_indeed(config):
 
 if __name__ == "__main__":
     import yaml
-    with open("config.yaml", "r") as file:
-        config = yaml.safe_load(file)
-    scrape_indeed(config)
+    with open("configs.yaml", "r") as file:
+        configs = yaml.safe_load(file)
+    scrape_indeed(configs)

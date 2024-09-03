@@ -13,12 +13,12 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class EmailOutreachAgent:
-    def __init__(self, config: Dict):
-        self.config = config
-        self.client = anthropic.Anthropic(api_key=config['anthropic']['api_key'])
-        self.sg = SendGridAPIClient(api_key=config['sendgrid']['api_key'])
-        self.from_email = config['sendgrid']['from_email']
-        self.email_sequences = config['email_sequences']
+    def __init__(self, configs: Dict):
+        self.configs = configs
+        self.client = anthropic.Anthropic(api_key=configs['anthropic']['api_key'])
+        self.sg = SendGridAPIClient(api_key=configs['sendgrid']['api_key'])
+        self.from_email = configs['sendgrid']['from_email']
+        self.email_sequences = configs['email_sequences']
         self.template_cache = {}
 
     async def generate_email_content(self, job_posting: Dict, contact_info: Dict, sequence: str) -> str:
@@ -67,7 +67,7 @@ class EmailOutreachAgent:
             return None
 
     def get_unsubscribe_link(self) -> str:
-        return f"<br><br><small>To unsubscribe, <a href='{self.config['unsubscribe_url']}'>click here</a>.<br>Our address: {self.config['company_address']}</small>"
+        return f"<br><br><small>To unsubscribe, <a href='{self.configs['unsubscribe_url']}'>click here</a>.<br>Our address: {self.configs['company_address']}</small>"
 
     async def schedule_email(self, to_email: str, subject: str, content: str, send_at: datetime) -> None:
         valid_email = self.validate_email(to_email)
@@ -115,15 +115,44 @@ class EmailOutreachAgent:
                 })
         return prepared_emails
 
-def email_outreach_agent(config: Dict):
-    agent = EmailOutreachAgent(config)
+def email_outreach_agent(configs: Dict):
+    agent = EmailOutreachAgent(configs)
 
     async def run(state: Dict) -> Dict:
         logger.info("Starting email outreach preparation and scheduling...")
-        prepared_emails = await agent.prepare_and_schedule_emails(state['job_postings'], state['contacts'])
-        
-        state['prepared_emails'] = prepared_emails
+        matched_data = state.get('matched_data', [])
+        prepared_emails = []
+
+        for match in matched_data:
+            job = match['job']
+            prospect = match['prospect']
+            # Assuming the contact info is stored with the job
+            contact_info = job.get('contact_info', {})
+            
+            if contact_info.get('email'):
+                email_content = await agent.generate_email_content(job, contact_info, 'initial_outreach')
+                send_date = datetime.now() + timedelta(days=agent.email_sequences['initial']['delay_days'])
+                
+                await agent.schedule_email(
+                    to_email=contact_info['email'],
+                    subject=agent.email_sequences['initial']['subject'],
+                    content=email_content,
+                    send_at=send_date
+                )
+                
+                prepared_emails.append({
+                    'to_email': contact_info['email'],
+                    'subject': agent.email_sequences['initial']['subject'],
+                    'content': email_content,
+                    'sequence': 'initial_outreach',
+                    'scheduled_send_date': send_date,
+                    'job': job,
+                    'prospect': prospect
+                })
+            else:
+                logger.warning(f"No email found for job at {job['company_name']}")
+
         logger.info(f"Prepared and scheduled {len(prepared_emails)} emails for sending")
-        return state
+        return {"prepared_emails": prepared_emails}
 
     return run

@@ -6,10 +6,10 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def job_scraping_agent(config):
+def job_scraping_agent(configs):
     def run(state):
         logger.info("Starting job scraping...")
-        job_postings = scrape_indeed(config)
+        job_postings = scrape_indeed(configs)
         logger.info(f"Scraped {len(job_postings)} job postings")
         
         # Save job postings to JSON file

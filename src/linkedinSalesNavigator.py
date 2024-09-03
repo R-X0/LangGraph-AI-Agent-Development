@@ -1,325 +1,431 @@
-import json
-import yaml
+# src/linkedinSalesNavigator.py
+
 import time
-import pickle
-import logging
-from selenium import webdriver
+import re
+from playwright.sync_api import expect
 from collections import defaultdict
-from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.chrome.options import Options
-import os
+from src.utils.utils import save_data_into_json
+from tenacity import retry, stop_after_attempt, wait_fixed
 
-logger = logging.getLogger(__name__)
+def sanitize_text(text):
+    return re.sub(r'[^a-zA-Z0-9\s]', '', text)
 
-def save_data_into_json(filename, data, merge=False):
-    if merge:
-        try:
-            with open(f"{filename}.json", "r") as file:
-                existing_data = json.load(file)
-            existing_data.extend(data)
-            data = existing_data
-        except FileNotFoundError:
-            pass
-    
-    with open(f"{filename}.json", "w") as file:
-        json.dump(data, file, indent=4)
+class LinkedInSalesNavigator:
+    def __init__(self, CONFIGS, page):
+        self.CONFIGS = CONFIGS
+        self.page = page
+        self.base_url = CONFIGS["BaseUrl"]
+        self.analyzed_job_posts = []
 
-def analyze_job_posts(config, job_list):
-    job_count_per_company = defaultdict(int)
-    job_titles = defaultdict(list)
-    source_count = defaultdict(lambda: defaultdict(int))
-    job_titles_in_both_sources = defaultdict(list)
+    def login(self):
+        print("-> Logging into LinkedIn")
+        self.page.goto(self.base_url)
+        self.page.wait_for_timeout(3000)
 
-    for job in job_list:
-        company = job["company_name"]
-        title = job["job_title"]
-        source = job.get("source", "Unknown")
+        if "Login screen" in self.page.content():
+            print("-> Login required. Please check your cookies.")
+            return False
 
-        job_count_per_company[company] += 1
-
-        if title not in job_titles[company]:
-            job_titles[company].append(title)
-
-        source_count[company][source] += 1
-
-        if source == "Indeed":
-            if source_count[company]["LinkedIn"] > 0 and title in job_titles[company]:
-                job_titles_in_both_sources[company].append(title)
-                job_count_per_company[company] -= 1
-        elif source == "LinkedIn":
-            if source_count[company]["Indeed"] > 0 and title in job_titles[company]:
-                job_titles_in_both_sources[company].append(title)
-                job_count_per_company[company] -= 1
-
-    results = []
-    minimum_job_posts = config.get("MinimumNumberOfJobPosts", 1)
-    for company in job_count_per_company:
-        if job_count_per_company[company] >= minimum_job_posts:
-            results.append(
-                {
-                    "company_name": company,
-                    "total_count": job_count_per_company[company],
-                    "same_post_titles": job_titles_in_both_sources[company],
-                }
-            )
-
-    results.sort(key=lambda x: x["total_count"], reverse=True)
-
-    return results
-
-def login(driver, wait, username, password):
-    try:
-        wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, 'iframe[title="Login screen"]')))
-        
-        login_frame = driver.find_element(By.CSS_SELECTOR, 'iframe[title="Login screen"]')
-        driver.switch_to.frame(login_frame)
-        
-        username_field = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "#username")))
-        username_field.send_keys(username)
-        
-        password_field = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "#password")))
-        password_field.send_keys(password)
-        
-        sign_in_button = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[aria-label="Sign in"]')))
-        sign_in_button.click()
-        
-        driver.switch_to.default_content()
-        
-        wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, '.search-global-typeahead__input')))
-        
-        logger.info("Successfully logged in to LinkedIn")
+        print("-> Successfully logged into LinkedIn")
         return True
-    except Exception as e:
-        logger.error(f"Login failed: {str(e)}")
-        return False
 
-def setup_driver(config, base_url):
-    logger.info("Setting up Chrome driver")
-    chrome_options = Options()
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
-    
-    if config.get("Headless", False):
-        chrome_options.add_argument("--headless")
-    
-    chromedriver_path = r"C:\Users\Bona\Desktop\chromedriver-win64\chromedriver.exe"
-    
-    if not os.path.exists(chromedriver_path):
-        raise FileNotFoundError(f"ChromeDriver not found at {chromedriver_path}. Please ensure it's in this location.")
-    
-    service = Service(chromedriver_path)
-    
-    try:
-        driver = webdriver.Chrome(service=service, options=chrome_options)
-        logger.info("Successfully initialized Chrome driver")
-        wait = WebDriverWait(driver, 20)
-        
-        logger.info("Logging into LinkedIn")
-        driver.get(base_url)
-        
-        return driver, wait
-    except Exception as e:
-        logger.error(f"Failed to initialize Chrome driver: {str(e)}")
-        raise
-
-def set_filters(driver, wait, config):
-    logger.info("Setting search filters")
-
-    # Set Company Filters
-    for company in config.get('companies', []):
+    def set_filters(self):
+        print("\n-> Setting Filters")
         try:
-            company_filter = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, 'fieldset [title="Current company"] li-icon[type="plus-icon"]')))
-            company_filter.click()
+            self.set_company_filters()
+            self.set_job_title_filters()
+            self.set_seniority_level_filters()
             
-            company_input = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, 'fieldset [title="Current company"] input')))
-            company_input.clear()
-            company_input.send_keys(company)
-            time.sleep(2)
-            
-            options = driver.find_elements(By.CSS_SELECTOR, 'ul[role="listbox"] li')
-            for option in options:
-                if company.lower() in option.text.lower():
-                    option.click()
-                    break
-            else:
-                if config['UseFirstOption']:
-                    options[0].click()
-                elif config['UseSearchQuery']:
-                    company_input.send_keys(Keys.RETURN)
+            if self.CONFIGS["OnlyUSProspects"]:
+                self.set_location_filters()  # This may now raise an exception
+
+            self.page.click('[aria-label="Collapse filter panel"]')
         except Exception as e:
-            logger.error(f"Error setting company filter for {company}: {str(e)}")
+            print(f"Fatal error in setting filters: {str(e)}")
+            print("Aborting the automation process due to filter setting failure.")
+            raise  # Re-raise the exception to stop the entire process
 
-    # Set Job Title Filters
-    for job_title in config.get('RequiredJobTitles', []):
-        try:
-            title_filter = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, 'fieldset [title="Current job title"] li-icon[type="plus-icon"]')))
-            title_filter.click()
-            
-            title_input = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, 'fieldset [title="Current job title"] input')))
-            title_input.send_keys(job_title)
-            time.sleep(2)
-            title_input.send_keys(Keys.RETURN)
-        except Exception as e:
-            logger.error(f"Error setting job title filter for {job_title}: {str(e)}")
-
-    # Set Seniority Level Filters
-    for level in config.get('RequiredSeniorityLevels', []):
-        try:
-            seniority_filter = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, 'fieldset [title="Seniority level"] li-icon[type="plus-icon"]')))
-            seniority_filter.click()
-            time.sleep(2)
-            
-            level_button = wait.until(EC.element_to_be_clickable((By.XPATH, f'//*[contains(@aria-label, "Include {level}")]')))
-            level_button.click()
-        except Exception as e:
-            logger.error(f"Error setting seniority level filter for {level}: {str(e)}")
-
-    # Set Location Filters
-    if config.get('OnlyUSProspects', False):
-        try:
-            geography_filter = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, 'fieldset [title="Geography"] li-icon[type="plus-icon"]')))
-            geography_filter.click()
-            time.sleep(1)
-            
-            geography_input = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, 'fieldset [title="Geography"] input')))
-            geography_input.send_keys("United States")
-            time.sleep(1)
-            
-            us_option = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, 'ul[role="listbox"] li:nth-child(1)')))
-            us_option.click()
-
-            for state in config.get('StatesToExclude', []):
-                geography_filter.click()
-                time.sleep(1)
-                geography_input.send_keys(state)
-                time.sleep(1)
-                exclude_option = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, 'ul[role="listbox"] li:nth-child(1) div div:nth-child(4)')))
-                exclude_option.click()
-        except Exception as e:
-            logger.error(f"Error setting location filters: {str(e)}")
-
-    logger.info("Search filters set successfully")
-
-def search_contacts(driver, wait, config):
-    logger.info("Searching for contacts")
-    set_filters(driver, wait, config)
-    
-    prospects = []
-    page = 1
-    
-    while True:
-        try:
-            all_entries = wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, ".artdeco-list__item")))
-            
-            for entry in all_entries:
-                try:
-                    name = entry.find_element(By.CSS_SELECTOR, '[data-anonymize="person-name"]').text
-                    title = entry.find_element(By.CSS_SELECTOR, '[data-anonymize="title"]').text
-                    company = entry.find_element(By.CSS_SELECTOR, '[data-view-name="search-results-lead-company-name"]').text
-                    location = entry.find_element(By.CSS_SELECTOR, '[data-anonymize="location"]').text
-                    profile_link = entry.find_element(By.CSS_SELECTOR, 'a[data-view-name="search-results-lead-name"]').get_attribute("href")
-                    
-                    prospects.append({
-                        "name": name,
-                        "title": title,
-                        "company": company,
-                        "location": location,
-                        "profile_link": profile_link,
-                    })
-                except Exception as e:
-                    logger.warning(f"Error extracting prospect info: {str(e)}")
-
-            logger.info(f"Processed page {page}, total prospects: {len(prospects)}")
-            
-            # Click on select all
-            select_all_button = driver.find_element(By.CSS_SELECTOR, ".p4 .full-width label")
-            select_all_button.click()
-
-            time.sleep(2)
+    def set_company_filters(self):
+        print("-> Setting Company Filters")
+        for job_post in self.analyzed_job_posts:
             try:
-                save_to_list_button = driver.find_element(
-                    By.CSS_SELECTOR,
-                    'button[aria-label="Save to list. All selected leads are saved. Add to a custom list."]',
-                )
-                save_to_list_button.click()
-            except:
-                try:
-                    save_to_list_button = driver.find_element(
-                        By.CSS_SELECTOR,
-                        'button[aria-label="Save to list. Save all selected leads and add to a custom list."]',
-                    )
-                    save_to_list_button.click()
-                except:
-                    save_to_list_button = driver.find_element(
-                        By.CSS_SELECTOR,
-                        '.p4 .full-width:nth-child(1) button[aria-expanded="false"]',
-                    )
-                    save_to_list_button.click()
+                self.page.wait_for_selector('fieldset [title="Current company"] li-icon[type="plus-icon"]', state="visible")
+                self.page.click('fieldset [title="Current company"] li-icon[type="plus-icon"]')
+                company_input = self.page.locator('fieldset [title="Current company"] input')
+                company_input.wait_for(state="visible")
+                
+                sanitized_company = sanitize_text(job_post["company_name"])
+                company_input.fill(sanitized_company)
 
-            time.sleep(1)
-            all_lists = driver.find_elements(By.CSS_SELECTOR, '[role="menuitem"] button')
+                self.page.wait_for_timeout(200)
 
-            for list_item in all_lists:
-                if config["SavelistName"].lower() in list_item.text.lower():
-                    list_item.click()
-                    time.sleep(1)
+                options = self.page.locator('ul[role="listbox"] li')
+                found = False
+                for option in options.all():
+                    if sanitized_company.lower() in sanitize_text(option.inner_text()).lower():
+                        option.click()
+                        found = True
+                        break
+
+                if not found:
+                    print(f"-> Failed to find Company: {sanitized_company}")
+                    if self.CONFIGS["UseFirstOption"]:
+                        options.first.click()
+                    elif self.CONFIGS["UseSearchQuery"]:
+                        company_input.press('Enter')
+
+                # Verify the filter was applied
+                applied_filters = self.page.locator('fieldset [title="Current company"] .artdeco-pill')
+                if not applied_filters.count():
+                    print(f"Warning: Filter for '{sanitized_company}' may not have been applied.")
+
+            except Exception as e:
+                print(f"Error setting company filter for '{sanitized_company}': {str(e)}")
+                continue
+
+    @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
+    def set_single_job_title_filter(self, job_title, is_first_entry=False):
+        print(f"  -> Setting filter for job title: {job_title}")
+        
+        # Look for the input field
+        title_input = self.page.locator('input[placeholder="Add current titles"]')
+        if not title_input.count():
+            # If not found, we might need to open the job title filter section
+            self.page.click('fieldset [title="Current job title"] li-icon[type="plus-icon"]')
+            title_input = self.page.locator('input[placeholder="Add current titles"]')
+        
+        title_input.wait_for(state="visible")
+        
+        # Clear the input field
+        title_input.fill("")
+        
+        sanitized_title = sanitize_text(job_title)
+        
+        # Type out the job title character by character
+        for char in sanitized_title:
+            title_input.type(char)
+            self.page.wait_for_timeout(50)  # Small delay between characters
+        
+        print(f"  -> Typed job title: {sanitized_title}")
+        self.page.wait_for_timeout(100)
+        
+        if is_first_entry:
+            # For the first entry, wait for suggestions and click the first one
+            try:
+                self.page.wait_for_selector('ul[role="listbox"]', state="visible", timeout=5000)
+                self.page.click('ul[role="listbox"] li:first-child')
+                print("  -> Clicked first suggestion")
+            except Exception as e:
+                print(f"  -> No suggestions appeared for first entry. Pressing Enter. Error: {str(e)}")
+                title_input.press('Enter')
+        else:
+            # For subsequent entries, just press Enter
+            print("  -> Subsequent entry: Pressing Enter")
+            title_input.press('Enter')
+        
+        # Verify the filter was applied
+        self.page.wait_for_timeout(1000)
+        applied_filters = self.page.locator('fieldset [title="Current job title"] .artdeco-pill')
+        if not applied_filters.count():
+            raise Exception(f"Filter for '{sanitized_title}' was not applied.")
+        
+        print(f"  -> Filter applied successfully for: {sanitized_title}")
+        
+        # Wait for any animations or UI updates to complete
+        self.page.wait_for_timeout(1000)
+
+    def set_job_title_filters(self):
+        print("-> Setting Job Title Filters")
+        for index, job_title in enumerate(self.CONFIGS["RequiredJobTitles"]):
+            try:
+                print(f"  -> Attempting to set filter for job title {index + 1}: {job_title}")
+                self.set_single_job_title_filter(job_title, is_first_entry=(index == 0))
+                print(f"  -> Successfully set filter for job title {index + 1}: {job_title}")
+            except Exception as e:
+                print(f"Error setting job title filter for '{job_title}': {str(e)}")
+            
+            # Check if the filter was actually applied
+            applied_filters = self.page.locator('fieldset [title="Current job title"] .artdeco-pill')
+            applied_count = applied_filters.count()
+            print(f"  -> Current number of applied job title filters: {applied_count}")
+            
+            # Wait for any UI updates
+            self.page.wait_for_timeout(1000)
+        
+        print("-> Finished attempting to set all job title filters")
+        # After setting all filters, wait for any final UI updates
+        self.page.wait_for_timeout(1000)
+        
+        # Final verification of all applied filters
+        applied_filters = self.page.locator('fieldset [title="Current job title"] .artdeco-pill')
+        applied_count = applied_filters.count()
+        expected_count = len(self.CONFIGS["RequiredJobTitles"])
+        if applied_count != expected_count:
+            print(f"Warning: Expected {expected_count} job title filters, but found {applied_count}")
+        else:
+            print(f"Successfully applied all {applied_count} job title filters")
+
+    def set_seniority_level_filters(self):
+        print("-> Setting Seniority Level Filters")
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                # Click to expand the Seniority level filter if it's collapsed
+                expand_button = self.page.locator('fieldset[title="Seniority level"] button[aria-expanded="false"]')
+                if expand_button.count() > 0:
+                    expand_button.click()
+                    self.page.wait_for_timeout(1000)
+
+                for index, seniority_level in enumerate(self.CONFIGS["RequiredSeniorityLevels"]):
+                    print(f"  -> Setting filter for seniority level: {seniority_level}")
+                    
+                    # Look for the specific seniority level option
+                    option_selector = f'li[aria-label*="{seniority_level}" i]'
+                    option = self.page.locator(option_selector)
+                    
+                    if option.count() > 0:
+                        # Click the "Include" button for this seniority level
+                        include_button = option.locator('div[aria-label*="Include" i]')
+                        if include_button.count() > 0:
+                            include_button.click()
+                            print(f"  -> Included: {seniority_level}")
+                            
+                            # Add a longer delay after selecting the first seniority level
+                            if index == 0:
+                                self.page.wait_for_timeout(2000)  # 2 second delay after the first selection
+                            else:
+                                self.page.wait_for_timeout(1000)  # 1 second delay for subsequent selections
+                        else:
+                            print(f"  -> Warning: Include button not found for '{seniority_level}'")
+                    else:
+                        print(f"  -> Warning: Seniority level '{seniority_level}' not found")
+
+                # Verify the filters were applied
+                applied_filters = self.page.locator('fieldset[title="Seniority level"] .artdeco-pill')
+                applied_count = applied_filters.count()
+                print(f"  -> Applied {applied_count} seniority level filters")
+
+                if applied_count != len(self.CONFIGS["RequiredSeniorityLevels"]):
+                    raise Exception(f"Not all seniority level filters were applied. Expected: {len(self.CONFIGS['RequiredSeniorityLevels'])}, Applied: {applied_count}")
+
+                print("  -> All seniority level filters applied successfully")
+                return  # Exit the method if successful
+
+            except Exception as e:
+                print(f"Error setting seniority level filters (Attempt {attempt + 1}/{max_retries}): {str(e)}")
+                if attempt < max_retries - 1:
+                    print("  -> Retrying...")
+                    self.page.wait_for_timeout(2000)  # Wait before retrying
+                else:
+                    print("  -> Max retries reached. Aborting seniority level filter setting.")
+                    raise  # Re-raise the exception to stop the entire process
+
+        # Wait for any UI updates
+        self.page.wait_for_timeout(1000)
+
+    def set_location_filters(self):
+        print("-> Setting Location Filters")
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                # Expand the Geography filter if it's collapsed
+                expand_button = self.page.locator('fieldset[title="Geography"] button[aria-expanded="false"]')
+                if expand_button.count() > 0:
+                    expand_button.click()
+                    self.page.wait_for_timeout(1000)
+
+                # Look for the input field
+                geography_input = self.page.locator('input[placeholder="Add locations"]')
+                if not geography_input.count():
+                    # If not found, we might need to open the geography filter section
+                    self.page.click('fieldset[title="Geography"] li-icon[type="plus-icon"]')
+                    geography_input = self.page.locator('input[placeholder="Add locations"]')
+                
+                geography_input.wait_for(state="visible")
+
+                # Include United States
+                self.type_and_include(geography_input, "United States")
+                print("  -> Included: United States")
+
+                # Exclude specified states
+                for state in self.CONFIGS["StatesToExclude"]:
+                    self.type_and_exclude(geography_input, state)
+                    print(f"  -> Excluded: {state}")
+
+                self.page.wait_for_timeout(2000)  # Wait for the UI to update
+
+                # Verify the filters were applied
+                applied_filters = self.page.locator('fieldset[title="Geography"] .artdeco-pill')
+                applied_count = applied_filters.count()
+                expected_count = 1 + len(self.CONFIGS["StatesToExclude"])  # United States + excluded states
+                
+                if applied_count != expected_count:
+                    raise Exception(f"Not all location filters were applied. Expected: {expected_count}, Applied: {applied_count}")
+
+                print(f"  -> Successfully applied {applied_count} location filters")
+                return  # Exit the method if successful
+
+            except Exception as e:
+                print(f"Error setting location filters (Attempt {attempt + 1}/{max_retries}): {str(e)}")
+                if attempt < max_retries - 1:
+                    print("  -> Retrying...")
+                    self.page.wait_for_timeout(2000)  # Wait before retrying
+                else:
+                    print("  -> Max retries reached. Aborting location filter setting.")
+                    raise  # Re-raise the exception to stop the entire process
+
+        # Wait for any UI updates
+        self.page.wait_for_timeout(1000)
+
+    def type_and_include(self, input_element, text):
+        input_element.fill("")  # Clear the input field
+        for char in text:
+            input_element.type(char)
+            self.page.wait_for_timeout(50)  # Small delay between characters
+        self.page.wait_for_timeout(1000)  # Wait for suggestions to appear
+        
+        # Press down arrow to select the first suggestion
+        input_element.press('ArrowDown')
+        self.page.wait_for_timeout(500)  # Wait after pressing down arrow
+        
+        # Press Enter to confirm the selection
+        input_element.press('Enter')
+        self.page.wait_for_timeout(1000)  # Wait after pressing Enter
+
+    def type_and_exclude(self, input_element, text):
+        input_element.fill("")  # Clear the input field
+        for char in text:
+            input_element.type(char)
+            self.page.wait_for_timeout(50)  # Small delay between characters
+        self.page.wait_for_timeout(1000)  # Wait for suggestions to appear
+        
+        # Click the first "Exclude" button
+        exclude_button = self.page.locator('div[aria-label*="Exclude"]').first
+        if exclude_button.count() > 0:
+            exclude_button.click()
+        else:
+            raise Exception(f"Exclude button not found for {text}")
+        
+        self.page.wait_for_timeout(1000)  # Wait after clicking Exclude
+
+
+    def search_whole_pages(self):
+        if "Request Timed Out" in self.page.content():
+            self.page.reload()
+
+        self.page.wait_for_timeout(4000)
+
+        number_of_searches_element = self.page.locator(".p4 .t-14.align-items-center span")
+        number_of_searches = number_of_searches_element.inner_text().split(" ")[0]
+
+        print(f"\n-> Found {number_of_searches} prospects in total")
+
+        prospects = []
+        page_num = 1
+        while len(prospects) < 50:
+            print(f"\n-> Processing page {page_num}")
+            try:
+                # Wait for the list container to be visible
+                self.page.wait_for_selector('.artdeco-list', state="visible", timeout=10000)
+                
+                # Force load all entries
+                self.force_load_entries()
+                
+                # Get all visible entries
+                all_entries = self.page.query_selector_all(".artdeco-list__item")
+                print(f"-> Found {len(all_entries)} entries on this page")
+
+                for entry in all_entries:
+                    if len(prospects) >= 50:
+                        break
+
+                    name = entry.query_selector('[data-anonymize="person-name"]')
+                    title = entry.query_selector('[data-anonymize="title"]')
+                    company = entry.query_selector('[data-view-name="search-results-lead-company-name"]')
+                    location = entry.query_selector('[data-anonymize="location"]')
+                    profile_link = entry.query_selector('a[data-view-name="search-results-lead-name"]')
+
+                    if all([name, title, company, location, profile_link]):
+                        prospects.append({
+                            "name": name.inner_text(),
+                            "title": title.inner_text(),
+                            "company": company.inner_text(),
+                            "location": location.inner_text(),
+                            "profile_link": profile_link.get_attribute('href'),
+                        })
+                        print(f"-> Added prospect: {name.inner_text()}")
+
+                print(f"-> Found {len(prospects)} prospects so far")
+
+                if len(prospects) >= 50:
                     break
 
-            next_button = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, 'button[aria-label="Next"]')))
-            if "disabled" in next_button.get_attribute("class"):
+                next_button = self.page.locator('button[aria-label="Next"]')
+                if "disabled" in next_button.get_attribute("class"):
+                    print("-> Reached last page")
+                    break
+
+                next_button.click()
+                print("-> Clicked next page")
+                self.page.wait_for_timeout(5000)  # Increased wait time after clicking next
+
+                page_num += 1
+
+            except Exception as e:
+                print(f"-> Error occurred: {e}")
+                print("-> Moving to next page...")
+
+        print(f"\n-> Finished collecting prospects. Total found: {len(prospects)}")
+        return prospects[:50]  # Ensure we return at most 50 prospects
+
+    def force_load_entries(self):
+        print("-> Forcing load of all entries")
+        last_entry_count = 0
+        while True:
+            # Scroll to bottom
+            self.page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
+            self.page.wait_for_timeout(1000)
+
+            # Try to force load by hovering over each entry
+            entries = self.page.query_selector_all(".artdeco-list__item")
+            for entry in entries:
+                try:
+                    entry.hover()
+                    self.page.wait_for_timeout(100)  # Short wait after each hover
+                except:
+                    pass  # If we can't hover over an element, just continue
+
+            # Check if we've loaded more entries
+            current_entry_count = len(self.page.query_selector_all(".artdeco-list__item"))
+            print(f"-> Current entry count: {current_entry_count}")
+            
+            if current_entry_count == last_entry_count:
+                print("-> No more entries loaded")
                 break
-            next_button.click()
-            time.sleep(2)
-            page += 1
+            
+            last_entry_count = current_entry_count
+
+        # Scroll back to top
+        self.page.evaluate('window.scrollTo(0, 0)')
+        self.page.wait_for_timeout(1000)
+        print("-> Scrolled back to top")
+
+
         
-        except Exception as e:
-            logger.error(f"Error occurred while searching on page {page}: {str(e)}")
-            break
-    
-    return prospects
+    def add_contacts(self):
+        full_start = time.time()
 
-def add_contacts(config):
-    full_start = time.time()
+        print("\n\n-> Starting LinkedIn Sales Automation\n")
 
-    with open(config["InputFileSRC"]) as file:
-        job_posts = json.load(file)
+        if not self.login():
+            return
 
-    linkedin_config = config.get('linkedin_sales_navigator', {})
-    analyzed_job_posts = analyze_job_posts(linkedin_config, job_posts)
-    save_data_into_json("analyzied_job_posts", analyzed_job_posts, merge=False)
+        self.set_filters()
+        prospects = self.search_whole_pages()
 
-    logger.info("Starting LinkedIn Sales Automation")
+        save_data_into_json("prospects", [prospects])
+        print("\n-> Data saved into prospects.json")
 
-    base_url = linkedin_config.get("BaseUrl", "https://www.linkedin.com/sales/search/people")
-    
-    try:
-        driver, wait = setup_driver(config, base_url)
-        prospects = search_contacts(driver, wait, linkedin_config)
-        logger.info(f"Found {len(prospects)} prospects")
-        
-        save_data_into_json("prospects", prospects, merge=False)
-        logger.info("Data saved into prospects.json")
+        print("\n-> Ending LinkedIn Sales Automation\n")
 
         return prospects
-    except Exception as e:
-        logger.error(f"Error in add_contacts: {str(e)}")
-        raise
-    finally:
-        if 'driver' in locals():
-            driver.quit()
-
-    logger.info("Ending LinkedIn Sales Automation")
-
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    with open("configs.yaml", "r") as file:
-        config = yaml.safe_load(file)
-    results = add_contacts(config)
-    print(f"Found {len(results)} prospects")
-    for prospect in results[:5]:
-        print(f"Name: {prospect['name']}, Title: {prospect['title']}, Company: {prospect['company']}")

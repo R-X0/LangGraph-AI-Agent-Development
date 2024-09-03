@@ -1,11 +1,12 @@
 langgraph
-selenium
-beautifulsoup4
-requests
+playwright
 pyyaml
+python-dotenv
 neo4j
 anthropic
 sendgrid
 email-validator
+bs4
+requests
 pyhunter
-python-dotenv
+tenacity

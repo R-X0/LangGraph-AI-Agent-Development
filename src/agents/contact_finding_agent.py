@@ -5,48 +5,29 @@ import os
 import requests
 from typing import Dict, List
 import logging
-from src.linkedinSalesNavigator import add_contacts
 import json
 
 logger = logging.getLogger(__name__)
 
 class ContactFinder:
-    def __init__(self, config: Dict):
-        self.config = config
-        self.hunter = PyHunter(os.getenv('HUNTER_API_KEY'))
-        self.apollo_api_key = config['apollo_io']['api_key']
-        self.contact_roles = config['contact_roles']
-        self.linkedin_prospects = None
-
-    def find_contact_linkedin(self, company_name: str, job_title: str) -> Dict:
-        if self.linkedin_prospects is None:
-            try:
-                self.config['InputFileSRC'] = 'job_posts.json'
-                self.linkedin_prospects = add_contacts(self.config)
-            except Exception as e:
-                logger.error(f"Failed to add contacts: {str(e)}")
-                return self._empty_contact_info(job_title, 'LinkedIn Sales Navigator')
-
-        for prospect in self.linkedin_prospects:
-            if prospect['company'].lower() == company_name.lower() and any(role.lower() in prospect['title'].lower() for role in self.contact_roles):
-                return {
-                    'email': prospect.get('email', 'N/A'),
-                    'position': prospect['title'],
-                    'confidence_score': 90,  # High confidence for LinkedIn data
-                    'domain': '',
-                    'first_name': prospect['name'].split()[0],
-                    'last_name': prospect['name'].split()[-1],
-                    'source': 'LinkedIn Sales Navigator'
-                }
-        return self._empty_contact_info(job_title, 'LinkedIn Sales Navigator')
+    def __init__(self, configs: Dict):
+        self.configs = configs
+        self.hunter = PyHunter(configs.get('hunter_io', {}).get('api_key') or os.getenv('HUNTER_API_KEY'))
+        self.apollo_api_key = configs.get('apollo_io', {}).get('api_key')
+        self.contact_roles = configs.get('contact_roles', [])
 
     def find_contact_hunter(self, company_name: str, job_title: str) -> Dict:
         try:
             result = self.hunter.domain_search(company=company_name)
             
-            if result and 'emails' in result and len(result['emails']) > 0:
+            if result is None or not result:
+                logger.warning(f"Hunter.io returned no results for company: {company_name}")
+                return self._empty_contact_info(job_title, 'Hunter.io')
+            
+            if 'emails' in result and result['emails']:
                 for email in result['emails']:
-                    if any(role.lower() in email.get('position', '').lower() for role in self.contact_roles):
+                    position = email.get('position', '').lower()
+                    if any(role.lower() in position for role in self.contact_roles):
                         return {
                             'email': email['value'],
                             'position': email.get('position', job_title),
@@ -121,11 +102,10 @@ class ContactFinder:
         job_title = job['job_title']
         
         logger.info(f"Finding contact for {company_name}...")
-        linkedin_info = self.find_contact_linkedin(company_name, job_title)
         hunter_info = self.find_contact_hunter(company_name, job_title)
         apollo_info = self.find_contact_apollo(company_name, job_title)
         
-        contacts = [linkedin_info, hunter_info, apollo_info]
+        contacts = [hunter_info, apollo_info]
         valid_contacts = [c for c in contacts if c['email'] is not None and c['email'] != 'N/A']
         
         if not valid_contacts:
@@ -136,16 +116,23 @@ class ContactFinder:
         logger.info(f"Best contact found: {best_contact['email']} (Source: {best_contact['source']})")
         return {'company_name': company_name, 'contact_info': best_contact}
 
-def contact_finding_agent(config: Dict):
-    finder = ContactFinder(config)
+def contact_finding_agent(configs: Dict):
+    finder = ContactFinder(configs)
 
     def run(state: Dict) -> Dict:
         logger.info("Starting contact finding...")
         contacts = []
         
         # Read job postings from job_posts.json
-        with open("job_posts.json", "r") as f:
-            job_postings = json.load(f)
+        try:
+            with open("job_posts.json", "r") as f:
+                job_postings = json.load(f)
+        except FileNotFoundError:
+            logger.error("job_posts.json file not found. Make sure it exists in the current directory.")
+            return {"error": "Job postings file not found"}
+        except json.JSONDecodeError:
+            logger.error("Error decoding job_posts.json. Make sure it's a valid JSON file.")
+            return {"error": "Invalid job postings file"}
         
         for job in job_postings:
             contact_info = finder.find_contact(job)

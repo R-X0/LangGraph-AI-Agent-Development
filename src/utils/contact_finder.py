@@ -1,7 +1,7 @@
 import anthropic
 
-def find_contact(company_name, api_key):
-    client = anthropic.Anthropic(api_key=api_key)
+def find_contact(company_name, configs):
+    client = anthropic.Anthropic(api_key=configs['anthropic']['api_key'])
     
     prompt = f"""
     Find potential contact information for the company: {company_name}. 
