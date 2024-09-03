@@ -126,10 +126,12 @@ async def main():
         result['prospects'] = prospects
 
         # Run matching and email preparation
-        match_result = await matching_and_email_agent(configs)(result)
+        match_agent = matching_and_email_agent(configs)
+        match_result = match_agent(result)
         result['matched_data'] = match_result['matched_data']
         
-        email_result = await email_outreach_agent(configs)(result)
+        email_agent = email_outreach_agent(configs)
+        email_result = email_agent(result)
         result['prepared_emails'] = email_result['prepared_emails']
 
         logger.info(f"Matched {len(result['matched_data'])} job-prospect pairs")

@@ -40,14 +40,6 @@
         "source": "Indeed"
     },
     {
-        "company_name": "Capital One",
-        "job_title": "Lead Data Engineer",
-        "job_location": "Richmond, VA 23218",
-        "job_description": "At least 2 years of experience in big data technologies.",
-        "job_post_date": "PostedPosted 1 day ago",
-        "source": "Indeed"
-    },
-    {
         "company_name": "Oncourse Home Solutions",
         "job_title": "Sr. Cloud Data Engineer",
         "job_location": "Hybrid work in Naperville, IL 60540",
@@ -60,6 +52,14 @@
         "job_title": "Principal Data Engineer",
         "job_location": "Remote",
         "job_description": "Proficient in cloud-based data warehousing (e.g., Snowflake) and cloud services (e.g., AWS).",
+        "job_post_date": "PostedPosted 1 day ago",
+        "source": "Indeed"
+    },
+    {
+        "company_name": "JPMorgan Chase & Co",
+        "job_title": "AWS Software Engineer III, Big Data and ETL",
+        "job_location": "Atlanta, GA 30326",
+        "job_description": "Strong experience in Big Data development & ETL data pipeline implementation using Apache Spark.",
         "job_post_date": "PostedPosted 1 day ago",
         "source": "Indeed"
     },
