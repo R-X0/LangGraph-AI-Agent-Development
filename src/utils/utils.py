@@ -1,11 +1,13 @@
-# src/utils.py
 import json
 
 def save_data_into_json(file_name, jsons, merge=True):
-    data = []
     if merge:
+        data = []
         for json_obj in jsons:
-            data += json_obj
+            if isinstance(json_obj, list):
+                data.extend(json_obj)
+            elif isinstance(json_obj, dict):
+                data.append(json_obj)
     else:
         data = jsons
 

@@ -21,51 +21,39 @@ class MatchingAgent:
             return json.load(f)
 
     def match_job_to_prospect(self, job: Dict, prospects: List[Dict]) -> Dict:
-        best_match = None
-        best_score = 0
+        prompt = f"""
+        Evaluate how well the following job posting matches with each prospect's profile.
+        Provide a match score between 0 and 100 for each prospect, where 100 is a perfect match.
+        Only respond with a JSON object containing the prospect's name as the key and the score as the value.
 
-        for prospect in prospects:
-            # Add a check to ensure prospect is a dictionary
-            if not isinstance(prospect, dict):
-                logger.warning(f"Skipping invalid prospect data: {prospect}")
-                continue
+        Job Posting:
+        Title: {job['job_title']}
+        Company: {job['company_name']}
+        Description: {job['job_description']}
 
-            prompt = f"""
-            Evaluate how well the following job posting matches with the prospect's profile:
+        Prospects:
+        {json.dumps([{
+            'name': p.get('name', 'N/A'),
+            'title': p.get('title', 'N/A'),
+            'company': p.get('company', 'N/A')
+        } for p in prospects], indent=2)}
+        """
 
-            Job Posting:
-            Title: {job['job_title']}
-            Company: {job['company_name']}
-            Description: {job['job_description']}
+        response = self.claude_client.messages.create(
+            model="claude-3-5-sonnet-20240620",
+            max_tokens=2000,
+            temperature=0,
+            messages=[{"role": "user", "content": prompt}]
+        )
 
-            Prospect:
-            Name: {prospect.get('name', 'N/A')}
-            Title: {prospect.get('title', 'N/A')}
-            Company: {prospect.get('company', 'N/A')}
-
-            Provide a match score between 0 and 100, where 100 is a perfect match.
-            Only respond with the numeric score.
-            """
-
-            response = self.claude_client.messages.create(
-                model="claude-3-5-sonnet-20240620",
-                max_tokens=100,
-                temperature=0,
-                messages=[{"role": "user", "content": prompt}]
-            )
-
-            try:
-                # Extract the content from the response
-                content = response.content[0].text if isinstance(response.content, list) else response.content
-                # Convert the content to a string and then to an integer
-                score = int(str(content).strip())
-                if score > best_score:
-                    best_score = score
-                    best_match = prospect
-            except (ValueError, AttributeError, IndexError) as e:
-                logger.warning(f"Invalid score returned by Claude for job {job['job_title']} and prospect {prospect.get('name', 'N/A')}: {str(e)}")
-
-        return {'job': job, 'prospect': best_match, 'score': best_score}
+        try:
+            scores = json.loads(response.content[0].text)
+            best_match = max(scores.items(), key=lambda x: x[1])
+            best_prospect = next(p for p in prospects if p.get('name') == best_match[0])
+            return {'job': job, 'prospect': best_prospect, 'score': best_match[1]}
+        except (json.JSONDecodeError, ValueError, AttributeError, IndexError) as e:
+            logger.error(f"Error processing Claude's response for job {job['job_title']}: {str(e)}")
+            return {'job': job, 'prospect': None, 'score': 0}
 
     def run(self) -> List[Dict]:
         logger.info("Starting matching process...")

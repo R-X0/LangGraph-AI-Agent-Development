@@ -1,1 +1,82 @@
-[]
+[
+    {
+        "company_name": "Ai Vantage",
+        "job_title": "Azure Data Engineer",
+        "job_location": "Vienna, VA 22182",
+        "job_description": "Develop data integration strategies to enable seamless data flow across systems.",
+        "job_post_date": "PostedJust posted",
+        "source": "Indeed"
+    },
+    {
+        "company_name": "Softcrylic Technology Solutions",
+        "job_title": "Senior Data Engineer (with Azure Databricks)",
+        "job_location": "Charlotte, NC 28208\u00a0(Ashley Park area)",
+        "job_description": "Data Warehousing: In-depth knowledge of data warehousing concepts, architecture, and implementation, including experience with various data warehouse platforms.",
+        "job_post_date": "PostedJust posted",
+        "source": "Indeed"
+    },
+    {
+        "company_name": "Softcrylic Technology Solutions",
+        "job_title": "Lead Data Engineer - Azure Databricks & ADF",
+        "job_location": "Philadelphia, PA 19103\u00a0(Logan Square area)",
+        "job_description": "Manage and utilize Azure Data Lake Gen 2 for efficient data storage and processing, ensuring data integrity and security.",
+        "job_post_date": "PostedJust posted",
+        "source": "Indeed"
+    },
+    {
+        "company_name": "Lockheed Martin",
+        "job_title": "Java & Big Data Developer- Cloud Engineer",
+        "job_location": "Annapolis Junction, MD 20701",
+        "job_description": "Develop, maintain, and enhance complex and diverse software systems, including processing-intensive analytics, novel algorithm development, and real-time\u2026",
+        "job_post_date": "PostedJust posted",
+        "source": "Indeed"
+    },
+    {
+        "company_name": "Oncourse Home Solutions",
+        "job_title": "Sr. Cloud Data Engineer",
+        "job_location": "Hybrid work in Naperville, IL 60540",
+        "job_description": "Majority of experience as a snowflake/cloud data engineer.",
+        "job_post_date": "PostedPosted 1 day ago",
+        "source": "Indeed"
+    },
+    {
+        "company_name": "Transcarent",
+        "job_title": "Principal Data Engineer",
+        "job_location": "Remote",
+        "job_description": "Proficient in cloud-based data warehousing (e.g., Snowflake) and cloud services (e.g., AWS).",
+        "job_post_date": "PostedPosted 1 day ago",
+        "source": "Indeed"
+    },
+    {
+        "company_name": "Allen Institute",
+        "job_title": "Associate Director - Data Platform & Engineering",
+        "job_location": "Hybrid work in Seattle, WA 98109",
+        "job_description": "10 years of experience in software engineering and/or cloud computing with at least 5 years experience leading one or more teams of software or cloud developers\u2026",
+        "job_post_date": "PostedPosted 1 day ago",
+        "source": "Indeed"
+    },
+    {
+        "company_name": "JPMorgan Chase & Co",
+        "job_title": "AWS Software Engineer III, Big Data and ETL",
+        "job_location": "Atlanta, GA 30326",
+        "job_description": "Strong experience in Big Data development & ETL data pipeline implementation using Apache Spark.",
+        "job_post_date": "PostedPosted 1 day ago",
+        "source": "Indeed"
+    },
+    {
+        "company_name": "JPMorgan Chase & Co",
+        "job_title": "Manager of Software Engineering - Data Delivery",
+        "job_location": "Columbus, OH 43240\u00a0(Polaris area)",
+        "job_description": "Manage risk associated with data use, data retention / destruction and data privacy.",
+        "job_post_date": "PostedPosted 1 day ago",
+        "source": "Indeed"
+    },
+    {
+        "company_name": "KPMG",
+        "job_title": "Senior Specialist, Federal Data Engineer",
+        "job_location": "McLean, VA 22102",
+        "job_description": "Maintain / enhance data pipelines, optimize and tune them for performance / efficiency in cloud environments.",
+        "job_post_date": "PostedPosted 1 day ago",
+        "source": "Indeed"
+    }
+]

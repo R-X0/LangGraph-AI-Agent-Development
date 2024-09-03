@@ -48,9 +48,17 @@ async def run_linkedin_sales_navigator(configs, processed_cookies):
         # Create LinkedInSalesNavigator instance
         linkedin_sales = LinkedInSalesNavigator(configs, page)
 
-        # Login and perform actions
-        await linkedin_sales.login()
+        # Run login
+        logged_in = await linkedin_sales.login()
+        if not logged_in:
+            logger.error("Failed to log in. Aborting LinkedIn Sales Navigator process.")
+            await browser.close()
+            return []
+
+        # Run set_filters
         await linkedin_sales.set_filters()
+
+        # Run search_whole_pages
         prospects = await linkedin_sales.search_whole_pages()
 
         # Save prospects data
