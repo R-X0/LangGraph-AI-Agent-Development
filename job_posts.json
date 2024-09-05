@@ -1,74 +1,42 @@
 [
     {
-        "company_name": "Ai Vantage",
-        "job_title": "Azure Data Engineer",
-        "job_location": "Vienna, VA 22182",
-        "job_description": "Develop data integration strategies to enable seamless data flow across systems.",
-        "job_post_date": "PostedJust posted",
-        "source": "Indeed"
-    },
-    {
-        "company_name": "Softcrylic Technology Solutions",
-        "job_title": "Senior Data Engineer (with Azure Databricks)",
-        "job_location": "Charlotte, NC 28208\u00a0(Ashley Park area)",
-        "job_description": "Data Warehousing: In-depth knowledge of data warehousing concepts, architecture, and implementation, including experience with various data warehouse platforms.",
-        "job_post_date": "PostedJust posted",
-        "source": "Indeed"
-    },
-    {
-        "company_name": "Softcrylic Technology Solutions",
-        "job_title": "Lead Data Engineer - Azure Databricks & ADF",
-        "job_location": "Philadelphia, PA 19103\u00a0(Logan Square area)",
-        "job_description": "Manage and utilize Azure Data Lake Gen 2 for efficient data storage and processing, ensuring data integrity and security.",
-        "job_post_date": "PostedJust posted",
-        "source": "Indeed"
-    },
-    {
-        "company_name": "Sadup Softech",
-        "job_title": "Big Data engineer /AI-ML",
-        "job_location": "United States",
-        "job_description": "As a Data Engineer or MLOps Engineer, your primary responsibility will be to develop & integrate ML solutions that focus on technology improvements.",
-        "job_post_date": "PostedJust posted",
-        "source": "Indeed"
-    },
-    {
-        "company_name": "Lockheed Martin",
-        "job_title": "Java & Big Data Developer- Cloud Engineer",
-        "job_location": "Annapolis Junction, MD 20701",
-        "job_description": "Develop, maintain, and enhance complex and diverse software systems, including processing-intensive analytics, novel algorithm development, and real-time\u2026",
-        "job_post_date": "PostedJust posted",
-        "source": "Indeed"
-    },
-    {
-        "company_name": "Oncourse Home Solutions",
-        "job_title": "Sr. Cloud Data Engineer",
-        "job_location": "Hybrid work in Naperville, IL 60540",
-        "job_description": "Majority of experience as a snowflake/cloud data engineer.",
-        "job_post_date": "PostedPosted 1 day ago",
-        "source": "Indeed"
-    },
-    {
-        "company_name": "Transcarent",
-        "job_title": "Principal Data Engineer",
+        "company_name": "VetsEZ",
+        "job_title": "Senior Data Integration Engineer (Remote Opportunity)",
         "job_location": "Remote",
-        "job_description": "Proficient in cloud-based data warehousing (e.g., Snowflake) and cloud services (e.g., AWS).",
-        "job_post_date": "PostedPosted 1 day ago",
+        "job_description": "Implement data integration and exchange using formats like FHIR, HL7, and CSV, incorporating data into databases such as MS SQL Server, Oracle, and Azure.",
+        "job_post_date": "PostedJust posted",
         "source": "Indeed"
     },
     {
-        "company_name": "JPMorgan Chase & Co",
-        "job_title": "AWS Software Engineer III, Big Data and ETL",
-        "job_location": "Atlanta, GA 30326",
-        "job_description": "Strong experience in Big Data development & ETL data pipeline implementation using Apache Spark.",
-        "job_post_date": "PostedPosted 1 day ago",
+        "company_name": "Medical Mutual of Ohio",
+        "job_title": "Data Infrastructure Engineer I-V",
+        "job_location": "Dublin, OH 43017",
+        "job_description": "We are looking for a mid-level to senior data engineer who wants to work on new data cloud tools in an exciting environment.",
+        "job_post_date": "PostedJust posted",
         "source": "Indeed"
     },
     {
-        "company_name": "Allen Institute",
-        "job_title": "Associate Director - Data Platform & Engineering",
-        "job_location": "Hybrid work in Seattle, WA 98109",
-        "job_description": "10 years of experience in software engineering and/or cloud computing with at least 5 years experience leading one or more teams of software or cloud developers\u2026",
-        "job_post_date": "PostedPosted 1 day ago",
+        "company_name": "Greystar Management Services, LLC",
+        "job_title": "Senior Databricks Data Engineer",
+        "job_location": "Charleston, SC 29403\u00a0(Cannonborough/Elliottbororugh area)",
+        "job_description": "Knowledge of advanced data engineering concepts such as dimensional modeling, ETL, data governance, data warehousing involving structured and unstructured data.",
+        "job_post_date": "PostedJust posted",
+        "source": "Indeed"
+    },
+    {
+        "company_name": "Sumitomo Mitsui Banking Corporation",
+        "job_title": "Senior Data Engineer, Compliance Technology (Hybrid in LA, PHX or Charlotte)",
+        "job_location": "Charlotte, NC 28202",
+        "job_description": "At least 2 years of experience building and operating data pipelines, data lakes, and/or data warehouses in Azure cloud.",
+        "job_post_date": "PostedJust posted",
+        "source": "Indeed"
+    },
+    {
+        "company_name": "Bloom Insurance Agency",
+        "job_title": "Sr. Manager, Data Engineering",
+        "job_location": "Remote",
+        "job_description": "5+ years of industry experience as a data engineer working on healthcare data solutions is required, with at least 3 years directly managing projects or teams.",
+        "job_post_date": "PostedJust posted",
         "source": "Indeed"
     }
 ]

@@ -1,46 +1,35 @@
-# src/agents/contact_finding_agent.py
-
-from pyhunter import PyHunter
 import os
 import requests
 from typing import Dict, List
 import logging
-import time
 from tenacity import retry, stop_after_attempt, wait_exponential
+import re
+from urllib.parse import urlparse
+import time
 
 logger = logging.getLogger(__name__)
 
 class ContactFinder:
     def __init__(self, configs: Dict):
         self.configs = configs
-        self.hunter = PyHunter(os.getenv('HUNTER_API_KEY'))
         self.apollo_api_key = configs['apollo_io']['api_key']
+        self.proxycurl_api_key = configs['proxycurl']['api_key']
+        self.target_roles = [
+            "HR",
+            "Human Resources",
+            "Recruiter",
+            "Talent Acquisition",
+            "People Operations"
+        ]
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
-    def find_contact_hunter(self, company_name: str, job_title: str) -> Dict:
-        try:
-            result = self.hunter.domain_search(company=company_name)
-            
-            if result and 'emails' in result and len(result['emails']) > 0:
-                email = result['emails'][0]
-                return {
-                    'email': email['value'],
-                    'position': email.get('position', job_title),
-                    'confidence_score': email.get('confidence', 0),
-                    'domain': result.get('domain', ''),
-                    'first_name': email.get('first_name', ''),
-                    'last_name': email.get('last_name', ''),
-                    'source': 'Hunter.io'
-                }
-            else:
-                logger.warning(f"Hunter.io couldn't find emails for company: {company_name}")
-                return self._empty_contact_info(job_title, 'Hunter.io')
-        except Exception as e:
-            logger.error(f"Error finding contact with Hunter.io for {company_name}: {str(e)}", exc_info=True)
-            return self._empty_contact_info(job_title, 'Hunter.io')
+    def _make_proxycurl_request(self, url: str, params: Dict) -> Dict:
+        headers = {"Authorization": f"Bearer {self.proxycurl_api_key}"}
+        response = requests.get(url, headers=headers, params=params)
+        response.raise_for_status()
+        return response.json()
 
-    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
-    def find_contact_apollo(self, company_name: str, job_title: str) -> Dict:
+    def find_contact_apollo(self, company_name: str) -> Dict:
         search_url = "https://api.apollo.io/v1/mixed_people/search"
         enrich_url = "https://api.apollo.io/v1/people/enrich"
         headers = {
@@ -48,94 +37,106 @@ class ContactFinder:
             "Cache-Control": "no-cache",
             "X-Api-Key": self.apollo_api_key
         }
+        
         search_data = {
             "q_organization_name": company_name,
             "page": 1,
-            "per_page": 20,
-            "person_titles": [job_title, "HR", "Recruiter", "Hiring Manager"]
+            "per_page": 10,
+            "person_titles": self.target_roles
         }
+
+        print(f"Apollo.io search data: {search_data}")
 
         try:
             search_response = requests.post(search_url, headers=headers, json=search_data)
             search_response.raise_for_status()
             search_result = search_response.json()
-
-            if 'error' in search_result:
-                logger.error(f"Apollo.io API error for {company_name}: {search_result['error']}")
-                return self._empty_contact_info(job_title, 'Apollo.io')
+            print(f"Apollo.io search result: {search_result}")
 
             if search_result and 'people' in search_result and search_result['people']:
-                for person in search_result['people']:
-                    if person.get('organization', {}).get('name', '').lower() == company_name.lower():
-                        enrich_data = {"id": person['id']}
-                        enrich_response = requests.post(enrich_url, headers=headers, json=enrich_data)
-                        enrich_response.raise_for_status()
-                        enrich_result = enrich_response.json()
+                person = search_result['people'][0]
+                
+                # Use the enrich endpoint to get the email
+                enrich_data = {"id": person['id']}
+                enrich_response = requests.post(enrich_url, headers=headers, json=enrich_data)
+                enrich_response.raise_for_status()
+                enrich_result = enrich_response.json()
+                print(f"Apollo.io enrich result: {enrich_result}")
+                
+                if 'person' in enrich_result:
+                    enriched_person = enrich_result['person']
+                    return {
+                        'first_name': enriched_person.get('first_name', ''),
+                        'last_name': enriched_person.get('last_name', ''),
+                        'full_name': f"{enriched_person.get('first_name', '')} {enriched_person.get('last_name', '')}".strip(),
+                        'position': enriched_person.get('title', ''),
+                        'company_name': company_name,
+                        'email': enriched_person.get('email', ''),
+                        'linkedin_url': enriched_person.get('linkedin_url', ''),
+                        'source': 'Apollo.io'
+                    }
 
-                        if 'person' in enrich_result:
-                            enriched_person = enrich_result['person']
-                            if enriched_person.get('email'):
-                                return {
-                                    'email': enriched_person['email'],
-                                    'position': enriched_person.get('title', job_title),
-                                    'confidence_score': 100,
-                                    'domain': enriched_person.get('organization', {}).get('website_url', ''),
-                                    'first_name': enriched_person.get('first_name', ''),
-                                    'last_name': enriched_person.get('last_name', ''),
-                                    'source': 'Apollo.io'
-                                }
-
-            logger.warning(f"No matching contact found in Apollo.io for {company_name}")
-            return self._empty_contact_info(job_title, 'Apollo.io')
+            print(f"No matching contact found in Apollo.io for {company_name}")
         except Exception as e:
-            logger.error(f"Error finding contact with Apollo.io for {company_name}: {str(e)}", exc_info=True)
-            return self._empty_contact_info(job_title, 'Apollo.io')
+            print(f"Error in Apollo.io request for {company_name}: {str(e)}")
+        
+        return {}
 
-    def _empty_contact_info(self, job_title: str, source: str) -> Dict:
-        return {
-            'email': None,
-            'position': job_title,
-            'confidence_score': 0,
-            'domain': '',
-            'first_name': '',
-            'last_name': '',
-            'source': source
-        }
+    def enrich_with_proxycurl(self, contact_info: Dict) -> Dict:
+        if not contact_info.get('linkedin_url'):
+            print(f"No LinkedIn URL available for {contact_info.get('full_name')}")
+            return contact_info
+
+        print(f"Attempting Proxycurl enrichment for {contact_info['full_name']}...")
+        
+        enrich_url = "https://nubela.co/proxycurl/api/v2/linkedin"
+        enrich_params = {'url': contact_info['linkedin_url']}
+        
+        try:
+            enrich_response = self._make_proxycurl_request(enrich_url, enrich_params)
+            
+            if enrich_response:
+                contact_info.update({
+                    'country': enrich_response.get('country'),
+                    'city': enrich_response.get('city'),
+                    'state': enrich_response.get('state'),
+                    'industry': enrich_response.get('industry'),
+                    'company_domain': enrich_response.get('company_domain'),
+                    'source': 'Apollo.io + Proxycurl'
+                })
+                print(f"Proxycurl enrichment successful for {contact_info['full_name']}")
+            else:
+                print(f"Proxycurl couldn't enrich data for {contact_info['full_name']}")
+        except Exception as e:
+            print(f"Error in Proxycurl enrichment for {contact_info['full_name']}: {str(e)}")
+        
+        return contact_info
 
     def find_contact(self, job: Dict) -> Dict:
         company_name = job['company_name']
-        job_title = job['job_title']
         
-        logger.info(f"Finding contact for {company_name}...")
+        print(f"Finding contact for {company_name}...")
         
-        company_variations = [company_name, company_name.replace(" ", ""), company_name.split()[0]]
+        contact_info = self.find_contact_apollo(company_name)
+        if contact_info:
+            if contact_info.get('email'):
+                print(f"Apollo.io found email for {company_name}: {contact_info['email']}")
+            enriched_info = self.enrich_with_proxycurl(contact_info)
+            return {'company_name': company_name, 'contact_info': enriched_info}
         
-        for variation in company_variations:
-            hunter_info = self.find_contact_hunter(variation, job_title)
-            if hunter_info.get('email'):
-                logger.info(f"Hunter.io result for {company_name}: {hunter_info.get('email')} (Score: {hunter_info.get('confidence_score')})")
-                return {'company_name': company_name, 'contact_info': hunter_info}
-            
-            apollo_info = self.find_contact_apollo(variation, job_title)
-            if apollo_info.get('email'):
-                logger.info(f"Apollo.io result for {company_name}: {apollo_info.get('email')} (Score: {apollo_info.get('confidence_score')})")
-                return {'company_name': company_name, 'contact_info': apollo_info}
-            
-            time.sleep(1)  # Add a 1-second delay between API calls
-        
-        logger.warning(f"No valid contacts found for {company_name}")
-        return {'company_name': company_name, 'contact_info': self._empty_contact_info(job_title, "Multiple sources")}
+        print(f"No valid contact found for {company_name}")
+        return {'company_name': company_name, 'contact_info': {}}
 
 def contact_finding_agent(configs: Dict):
     finder = ContactFinder(configs)
 
     def run(state: Dict) -> Dict:
-        logger.info("Starting contact finding...")
+        print("Starting contact finding...")
         contacts = []
         for job in state.get('job_postings', []):
             contact_info = finder.find_contact(job)
             contacts.append(contact_info)
-        logger.info(f"Found contact information for {len(contacts)} companies")
+        print(f"Found contact information for {len(contacts)} companies")
         return {"job_postings": state['job_postings'], "contacts": contacts}
 
     return run

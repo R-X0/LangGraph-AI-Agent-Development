@@ -1,78 +1,19 @@
 # main.py
 
 import yaml
+import os
 from langgraph.graph import StateGraph
 from src.agents.job_scraping_agent import job_scraping_agent
 from src.agents.contact_finding_agent import contact_finding_agent
-from src.agents.matching_and_email_agent import matching_and_email_agent
 from src.agents.email_outreach_agent import email_outreach_agent
-from src.linkedinSalesNavigator import LinkedInSalesNavigator
-from src.utils.utils import save_data_into_json
-from playwright.async_api import async_playwright
-import os
 from dotenv import load_dotenv
 import logging
-import json
 import asyncio
 
 load_dotenv()
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
-
-def process_cookies(cookies):
-    for cookie in cookies:
-        if 'expiry' in cookie:
-            cookie['expires'] = cookie.pop('expiry')
-        
-        if 'sameSite' not in cookie or cookie['sameSite'] not in ['Strict', 'Lax', 'None']:
-            cookie['sameSite'] = 'Lax'
-        
-        allowed_fields = ['name', 'value', 'domain', 'path', 'expires', 'httpOnly', 'secure', 'sameSite']
-        for key in list(cookie.keys()):
-            if key not in allowed_fields:
-                del cookie[key]
-    
-    return cookies
-
-async def run_linkedin_sales_navigator(configs, processed_cookies):
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=False)
-        context = await browser.new_context()
-        
-        # Add the processed cookies to the context
-        await context.add_cookies(processed_cookies)
-        
-        page = await context.new_page()
-
-        # Create LinkedInSalesNavigator instance
-        linkedin_sales = LinkedInSalesNavigator(configs, page)
-
-        # Run login
-        logged_in = await linkedin_sales.login()
-        if not logged_in:
-            logger.error("Failed to log in. Aborting LinkedIn Sales Navigator process.")
-            await browser.close()
-            return []
-
-        # Run set_filters
-        await linkedin_sales.set_filters()
-
-        # Run search_whole_pages
-        prospects = await linkedin_sales.search_whole_pages()
-
-        # Save prospects data
-        save_data_into_json("prospects", prospects)
-        logger.info(f"LinkedIn prospects saved into prospects.json. Total prospects: {len(prospects)}")
-
-        logger.info("Ending LinkedIn Sales Automation")
-
-        # Keep the browser open until user input
-        input("Press Enter to close the browser...")
-
-        await browser.close()
-
-    return prospects
 
 async def main():
     try:
@@ -86,56 +27,38 @@ async def main():
         class State(dict):
             job_postings: list
             contacts: list
-            prospects: list
-            matched_data: list
             prepared_emails: list
 
         graph = StateGraph(State)
 
         graph.add_node("scrape_jobs", job_scraping_agent(configs))
         graph.add_node("find_contacts", contact_finding_agent(configs))
+        graph.add_node("prepare_emails", email_outreach_agent(configs))
 
         graph.add_edge("scrape_jobs", "find_contacts")
+        graph.add_edge("find_contacts", "prepare_emails")
 
         graph.set_entry_point("scrape_jobs")
-        graph.set_finish_point("find_contacts")
+        graph.set_finish_point("prepare_emails")
 
         workflow = graph.compile()
 
         logger.info("Starting workflow...")
-        initial_state = {"job_postings": [], "contacts": [], "prospects": [], "matched_data": [], "prepared_emails": []}
+        initial_state = {"job_postings": [], "contacts": [], "prepared_emails": []}
         result = await workflow.ainvoke(initial_state)
         
         logger.info("Workflow completed.")
         logger.info(f"Scraped {len(result['job_postings'])} job postings")
         logger.info(f"Found contact information for {len(result['contacts'])} companies")
+        logger.info(f"Prepared {len(result['prepared_emails'])} personalized emails")
 
-        # LinkedIn Sales Navigator process
-        logger.info("Starting LinkedIn Sales Navigator process...")
-
-        # Load cookies
-        with open('cookies.json', 'r') as f:
-            cookies = json.load(f)
-        
-        # Process the cookies
-        processed_cookies = process_cookies(cookies)
-
-        prospects = await run_linkedin_sales_navigator(configs, processed_cookies)
-
-        # Update the state with the prospects
-        result['prospects'] = prospects
-
-        # Run matching and email preparation
-        match_agent = matching_and_email_agent(configs)
-        match_result = match_agent(result)
-        result['matched_data'] = match_result['matched_data']
-        
-        email_agent = email_outreach_agent(configs)
-        email_result = email_agent(result)
-        result['prepared_emails'] = email_result['prepared_emails']
-
-        logger.info(f"Matched {len(result['matched_data'])} job-prospect pairs")
-        logger.info(f"Prepared {len(result['prepared_emails'])} emails for sending")
+        logger.info("\n" + "="*50 + "\nPrepared Emails:\n" + "="*50)
+        for i, email in enumerate(result['prepared_emails'], 1):
+            logger.info(f"\nEmail {i}:")
+            logger.info(f"To: {email['to_email']}")
+            logger.info(f"Subject: {email['subject']}")
+            logger.info(f"Content:\n{email['content']}")
+            logger.info("-" * 50)
 
         logger.info("Workflow completed successfully.")
 
